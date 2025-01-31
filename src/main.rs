@@ -1,14 +1,14 @@
-#![allow(unused)]
 use anyhow::Context;
-use base64;
-use byteorder::{BigEndian, ByteOrder};
 use tun;
+use etherparse::Ipv4HeaderSlice;
+use etherparse::Ipv4ExtensionsSlice;
 
 const BUF_LEN: usize = 4096;
 const TUN_NAME: &'static str = "utun69";
 const TCP_HEADER_SIZE: usize = 20;
 const PROTO_INDEX: usize = 9;
-const FLAGS_INDEX: usize = 33;
+const FLAGS_INDEX_V6: usize = 33;
+const FLAGS_INDEX_V4: usize = 6;
 
 #[derive(PartialEq)]
 enum Proto {
@@ -40,17 +40,39 @@ fn main() -> anyhow::Result<()> {
 
         match proto {
             Proto::TCP => {
-                continue; // for now
                 println!("TCP packet recieved.");
-                let tcp_flags = buf[FLAGS_INDEX];
+                let tcp_flags = buf[FLAGS_INDEX_V6];
                 let sync = (tcp_flags & 0x02) != 0;
                 let ack = (tcp_flags & 0x10) != 0;
                 let fin = (tcp_flags & 0x01) != 0;
 
                 println!("FLAGS: \nSync: {}, Ack: {}, Fin: {}", sync, ack, fin);
+                continue; // for now
             }
             Proto::ICMP => {
                 println!("Ping packet received.");
+
+                // Manual
+                let total_len: u16 = (buf[2] as u16) << 8 | buf[3] as u16;
+                let ihl = (buf[0] & 0x0F) as usize;
+                let header_len = ihl * 4;
+                let flags = buf[FLAGS_INDEX_V4];
+                let reserved = (flags & 0b100) != 0;
+                let df = (flags & 0b010) != 0;
+                let mf = (flags & 0b001) != 0;
+
+                println!("Manual: Total length: {total_len}");
+                println!("Manual: Header length: {header_len}");
+                println!("Manual: Reserved: {reserved}");
+                println!("Manual: Don't fragment: {df}");
+                println!("Manual: More fragments: {mf}");
+
+                // Using crate
+                let res = Ipv4HeaderSlice::from_slice(&buf[..nbytes]).context("unable to parse ipv4 header")?;
+                assert_eq!(total_len, res.total_len(), "total length mismatch");
+                assert_eq!(header_len, (res.ihl() * 4) as usize, "header length mismatch");
+                assert_eq!(mf, res.more_fragments(), "more fragments mismatch");
+                assert_eq!(df, res.dont_fragment(), "don't fragment mismatch");
             }
             _ => {
                 println!("Other packet received.");
