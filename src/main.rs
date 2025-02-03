@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 use anyhow::Context;
-use tun;
 use etherparse::Ipv4HeaderSlice;
 use etherparse::TcpHeaderSlice;
-use std::net::Ipv4Addr;
 use std::collections::HashMap;
+use std::net::Ipv4Addr;
+use tun;
 
 const BUF_LEN: usize = 84;
 const TUN_NAME: &'static str = "utun69";
@@ -17,7 +17,7 @@ const IPV4_HEADER_LEN: usize = 20;
 const ICMP_HEADER_LEN: usize = 8;
 const ICMP_PAYLOAD_LEN: usize = 56;
 const TCP_HEADER_LEN: usize = 20; // common header
-const TCP_PAYLOAD_LEN: usize = 24; // can vary 
+const TCP_PAYLOAD_LEN: usize = 24; // can vary
 
 mod tcp;
 
@@ -59,7 +59,8 @@ fn main() -> anyhow::Result<()> {
             _ => Proto::Other,
         };
 
-        let ipv4_header = Ipv4HeaderSlice::from_slice(&buf[..IPV4_HEADER_LEN]).context("unable to parse ipv4 header")?;
+        let ipv4_header = Ipv4HeaderSlice::from_slice(&buf[..IPV4_HEADER_LEN])
+            .context("unable to parse ipv4 header")?;
         let mut connections: HashMap<Quad, tcp::State> = Default::default();
 
         match proto {
@@ -69,14 +70,26 @@ fn main() -> anyhow::Result<()> {
                 // let ack = (tcp_flags & 0x10) != 0;
                 // let fin = (tcp_flags & 0x01) != 0;
                 // println!("FLAGS: \nSync: {}, Ack: {}, Fin: {}", sync, ack, fin);
-                let tcp_header = TcpHeaderSlice::from_slice(&buf[IPV4_HEADER_LEN..]).context("failed to parse tcp_header")?;
+                let tcp_header = TcpHeaderSlice::from_slice(&buf[IPV4_HEADER_LEN..])
+                    .context("failed to parse tcp_header")?;
                 let tcp_payload_offset = IPV4_HEADER_LEN + TCP_HEADER_LEN;
-                println!("{} -> {} of tcp to port {}", ipv4_header.source_addr(), ipv4_header.destination_addr(), tcp_header.destination_port());
-                connections.entry(Quad{
-                    src: (ipv4_header.source_addr(), tcp_header.source_port()),
-                    dest: (ipv4_header.destination_addr(), tcp_header.destination_port()),
-                }).or_default().on_packet(ipv4_header, tcp_header, &buf[tcp_payload_offset..]);
-            },
+                println!(
+                    "{} -> {} of tcp to port {}",
+                    ipv4_header.source_addr(),
+                    ipv4_header.destination_addr(),
+                    tcp_header.destination_port()
+                );
+                connections
+                    .entry(Quad {
+                        src: (ipv4_header.source_addr(), tcp_header.source_port()),
+                        dest: (
+                            ipv4_header.destination_addr(),
+                            tcp_header.destination_port(),
+                        ),
+                    })
+                    .or_default()
+                    .on_packet(ipv4_header, tcp_header, &buf[tcp_payload_offset..]);
+            }
             Proto::ICMP => {
                 // Manual
                 let total_len: u16 = (buf[2] as u16) << 8 | buf[3] as u16;
@@ -86,20 +99,45 @@ fn main() -> anyhow::Result<()> {
                 let _reserved = (flags & 0b100) != 0;
                 let df = (flags & 0b010) != 0;
                 let mf = (flags & 0b001) != 0;
-                let payload_len = total_len  - header_len as u16;
-                let src_addr: u32 = (buf[12] as u32) << 24 | (buf[13] as u32) << 16 | (buf[14] as u32) << 8 | buf[15] as u32;
-                let dest_addr: u32 = (buf[16] as u32) << 24 | (buf[17] as u32) << 16 | (buf[18] as u32) << 8 | buf[19] as u32;
+                let payload_len = total_len - header_len as u16;
+                let src_addr: u32 = (buf[12] as u32) << 24
+                    | (buf[13] as u32) << 16
+                    | (buf[14] as u32) << 8
+                    | buf[15] as u32;
+                let dest_addr: u32 = (buf[16] as u32) << 24
+                    | (buf[17] as u32) << 16
+                    | (buf[18] as u32) << 8
+                    | buf[19] as u32;
                 let _seq: u16 = (buf[26] as u16) << 8 | buf[27] as u16;
 
                 // Using crate
-                assert!(nbytes > IPV4_HEADER_LEN, "Note enough bytes for IPV4 header parsing");
+                assert!(
+                    nbytes > IPV4_HEADER_LEN,
+                    "Note enough bytes for IPV4 header parsing"
+                );
                 assert_eq!(total_len, ipv4_header.total_len(), "total length mismatch");
-                assert_eq!(header_len, (ipv4_header.ihl() * 4) as usize, "header length mismatch");
+                assert_eq!(
+                    header_len,
+                    (ipv4_header.ihl() * 4) as usize,
+                    "header length mismatch"
+                );
                 assert_eq!(mf, ipv4_header.more_fragments(), "more fragments mismatch");
                 assert_eq!(df, ipv4_header.dont_fragment(), "don't fragment mismatch");
-                assert_eq!(payload_len, ipv4_header.payload_len().unwrap(), "payload length mismatch");
-                assert_eq!(src_addr, ipv4_header.source_addr().into(), "source addipv4_header. mismatch");
-                assert_eq!(dest_addr, ipv4_header.destination_addr().into(), "source addipv4_header. mismatch");
+                assert_eq!(
+                    payload_len,
+                    ipv4_header.payload_len().unwrap(),
+                    "payload length mismatch"
+                );
+                assert_eq!(
+                    src_addr,
+                    ipv4_header.source_addr().into(),
+                    "source addipv4_header. mismatch"
+                );
+                assert_eq!(
+                    dest_addr,
+                    ipv4_header.destination_addr().into(),
+                    "source addipv4_header. mismatch"
+                );
             }
             _ => {
                 println!("Other packet received.");
