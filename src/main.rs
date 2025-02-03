@@ -3,10 +3,11 @@ use anyhow::Context;
 use tun;
 use etherparse::Ipv4HeaderSlice;
 use etherparse::TcpHeaderSlice;
+use std::net::Ipv4Addr;
+use std::collections::HashMap;
 
 const BUF_LEN: usize = 84;
 const TUN_NAME: &'static str = "utun69";
-const TCP_HEADER_SIZE: usize = 20;
 const PROTO_INDEX: usize = 9;
 const FLAGS_INDEX_V6: usize = 33;
 const FLAGS_INDEX_V4: usize = 6;
@@ -15,8 +16,10 @@ const FLAGS_INDEX_V4: usize = 6;
 const IPV4_HEADER_LEN: usize = 20;
 const ICMP_HEADER_LEN: usize = 8;
 const ICMP_PAYLOAD_LEN: usize = 56;
-const TCP_HEADER_LEN: usize = 20;
+const TCP_HEADER_LEN: usize = 20; // common header
 const TCP_PAYLOAD_LEN: usize = 24; // can vary 
+
+mod tcp;
 
 #[derive(PartialEq)]
 enum Proto {
@@ -25,16 +28,13 @@ enum Proto {
     Other,
 }
 
-// impl Proto {
-//     fn parse_i(&self) {
-//         match self {
-//             ICMP => {
-// 
-//             }
-//             _ => todo!("")
-//         }
-//     }
-// }
+type Port = u16;
+
+#[derive(Hash, Debug, Clone, Copy, PartialEq, Eq)]
+struct Quad {
+    src: (Ipv4Addr, Port),
+    dest: (Ipv4Addr, Port),
+}
 
 fn main() -> anyhow::Result<()> {
     let mut config = tun::Configuration::default();
@@ -46,7 +46,7 @@ fn main() -> anyhow::Result<()> {
         let nbytes = nic.recv(&mut buf[..]).context("failed to receive")?;
 
         // Check if we have enough bytes for the TCP header
-        if nbytes < TCP_HEADER_SIZE {
+        if nbytes < TCP_HEADER_LEN {
             println!("Not enough data for the TCP header.");
             continue;
         }
@@ -60,6 +60,7 @@ fn main() -> anyhow::Result<()> {
         };
 
         let ipv4_header = Ipv4HeaderSlice::from_slice(&buf[..IPV4_HEADER_LEN]).context("unable to parse ipv4 header")?;
+        let mut connections: HashMap<Quad, tcp::State> = Default::default();
 
         match proto {
             Proto::TCP => {
@@ -69,7 +70,12 @@ fn main() -> anyhow::Result<()> {
                 // let fin = (tcp_flags & 0x01) != 0;
                 // println!("FLAGS: \nSync: {}, Ack: {}, Fin: {}", sync, ack, fin);
                 let tcp_header = TcpHeaderSlice::from_slice(&buf[IPV4_HEADER_LEN..]).context("failed to parse tcp_header")?;
+                let tcp_payload_offset = IPV4_HEADER_LEN + TCP_HEADER_LEN;
                 println!("{} -> {} of tcp to port {}", ipv4_header.source_addr(), ipv4_header.destination_addr(), tcp_header.destination_port());
+                connections.entry(Quad{
+                    src: (ipv4_header.source_addr(), tcp_header.source_port()),
+                    dest: (ipv4_header.destination_addr(), tcp_header.destination_port()),
+                }).or_default().on_packet(ipv4_header, tcp_header, &buf[tcp_payload_offset..]);
             },
             Proto::ICMP => {
                 // Manual
