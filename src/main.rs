@@ -3,7 +3,7 @@ use tun;
 use etherparse::Ipv4HeaderSlice;
 // use etherparse::Ipv4ExtensionsSlice;
 
-const BUF_LEN: usize = 4096;
+const BUF_LEN: usize = 84;
 const TUN_NAME: &'static str = "utun69";
 const TCP_HEADER_SIZE: usize = 20;
 const PROTO_INDEX: usize = 9;
