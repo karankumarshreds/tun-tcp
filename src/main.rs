@@ -1,7 +1,7 @@
 use anyhow::Context;
 use tun;
 use etherparse::Ipv4HeaderSlice;
-use etherparse::Ipv4ExtensionsSlice;
+// use etherparse::Ipv4ExtensionsSlice;
 
 const BUF_LEN: usize = 4096;
 const TUN_NAME: &'static str = "utun69";
@@ -32,6 +32,8 @@ fn main() -> anyhow::Result<()> {
             continue;
         }
 
+        println!("Received {nbytes} bytes");
+
         let proto: Proto = match buf[PROTO_INDEX] {
             6 => Proto::TCP,
             1 => Proto::ICMP,
@@ -60,12 +62,20 @@ fn main() -> anyhow::Result<()> {
                 let reserved = (flags & 0b100) != 0;
                 let df = (flags & 0b010) != 0;
                 let mf = (flags & 0b001) != 0;
+                let payload_len = total_len  - header_len as u16;
+                let src_addr: u32 = (buf[12] as u32) << 24 | (buf[13] as u32) << 16 | (buf[14] as u32) << 8 | buf[15] as u32;
+                let dest_addr: u32 = (buf[16] as u32) << 24 | (buf[17] as u32) << 16 | (buf[18] as u32) << 8 | buf[19] as u32;
+                let seq: u16 = (buf[26] as u16) << 8 | buf[27] as u16;
 
-                println!("Manual: Total length: {total_len}");
-                println!("Manual: Header length: {header_len}");
-                println!("Manual: Reserved: {reserved}");
-                println!("Manual: Don't fragment: {df}");
-                println!("Manual: More fragments: {mf}");
+                println!("Total length: {total_len}");
+                println!("Header length: {header_len}");
+                println!("Reserved: {reserved}");
+                println!("Don't fragment: {df}");
+                println!("More fragments: {mf}");
+                println!("Source address: {src_addr}");
+                println!("Destination address: {dest_addr}");
+                println!("Payload length: {payload_len}");
+                println!("Sequence: {seq}");
 
                 // Using crate
                 let res = Ipv4HeaderSlice::from_slice(&buf[..nbytes]).context("unable to parse ipv4 header")?;
@@ -73,6 +83,9 @@ fn main() -> anyhow::Result<()> {
                 assert_eq!(header_len, (res.ihl() * 4) as usize, "header length mismatch");
                 assert_eq!(mf, res.more_fragments(), "more fragments mismatch");
                 assert_eq!(df, res.dont_fragment(), "don't fragment mismatch");
+                assert_eq!(payload_len, res.payload_len().unwrap(), "payload length mismatch");
+                assert_eq!(src_addr, res.source_addr().into(), "source address mismatch");
+                assert_eq!(dest_addr, res.destination_addr().into(), "source address mismatch");
             }
             _ => {
                 println!("Other packet received.");
