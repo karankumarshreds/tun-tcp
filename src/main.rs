@@ -73,22 +73,19 @@ fn main() -> anyhow::Result<()> {
                 let tcp_header = TcpHeaderSlice::from_slice(&buf[IPV4_HEADER_LEN..])
                     .context("failed to parse tcp_header")?;
                 let tcp_payload_offset = IPV4_HEADER_LEN + TCP_HEADER_LEN;
-                println!(
-                    "{} -> {} of tcp to port {}",
-                    ipv4_header.source_addr(),
-                    ipv4_header.destination_addr(),
-                    tcp_header.destination_port()
-                );
                 connections
                     .entry(Quad {
-                        src: (ipv4_header.source_addr(), tcp_header.source_port()),
+                        src: (
+                            ipv4_header.source_addr(),
+                            tcp_header.source_port(),
+                        ),
                         dest: (
                             ipv4_header.destination_addr(),
                             tcp_header.destination_port(),
                         ),
                     })
                     .or_default()
-                    .on_packet(ipv4_header, tcp_header, &buf[tcp_payload_offset..]);
+                    .on_packet(ipv4_header, tcp_header, &buf[tcp_payload_offset..nbytes]);
             }
             Proto::ICMP => {
                 // Manual
