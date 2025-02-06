@@ -39,14 +39,14 @@ struct Quad {
 fn main() -> anyhow::Result<()> {
     let mut config = tun::Configuration::default();
     let config = config.tun_name(TUN_NAME); /* add tun name */
-    let nic = tun::create(&config).context("failed to create tun")?;
+    let mut nic = tun::create(&config).context("failed to create tun")?;
     let mut buf = [0u8; BUF_LEN];
 
     loop {
-        let nbytes = nic.recv(&mut buf[..]).context("failed to receive")?;
+        let nbytes = &nic.recv(&mut buf[..]).context("failed to receive")?;
 
         // Check if we have enough bytes for the TCP header
-        if nbytes < TCP_HEADER_LEN {
+        if *nbytes < TCP_HEADER_LEN {
             println!("Not enough data for the TCP header.");
             continue;
         }
@@ -85,7 +85,7 @@ fn main() -> anyhow::Result<()> {
                         ),
                     })
                     .or_default()
-                    .on_packet(ipv4_header, tcp_header, &buf[tcp_payload_offset..nbytes]);
+                    .on_packet(&mut nic, ipv4_header, tcp_header, &buf[tcp_payload_offset..*nbytes])?;
             }
             Proto::ICMP => {
                 // Manual
@@ -109,7 +109,7 @@ fn main() -> anyhow::Result<()> {
 
                 // Using crate
                 assert!(
-                    nbytes > IPV4_HEADER_LEN,
+                    *nbytes > IPV4_HEADER_LEN,
                     "Note enough bytes for IPV4 header parsing"
                 );
                 assert_eq!(total_len, ipv4_header.total_len(), "total length mismatch");
