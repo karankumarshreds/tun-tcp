@@ -8,15 +8,32 @@ use std::io;
 pub enum State {
     Closed,
     Listen,
-    SynRcvd,
-    Estab,
+    // SynRcvd,
+    // Estab,
 }
 
-impl Default for State {
+pub struct Connection {
+    state: State,
+}
+
+
+impl Default for Connection {
     fn default() -> Self {
-        State::Listen // for now listen to all connections 
+        Self {
+            state: State::Listen /* for now */
+        }
     }
 }
+
+struct SendSequenceSpace {
+    /// send unacknowledged (the last sequence which has been sent but not acknowledged)
+    una: usize,
+    /// send next (next sequence number to be send)
+    nxt: usize,
+    /// window size ()
+    wnd: usize,
+}
+   
 
 impl State {
     pub fn on_packet(

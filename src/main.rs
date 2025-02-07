@@ -61,7 +61,7 @@ fn main() -> anyhow::Result<()> {
 
         let ipv4_header = Ipv4HeaderSlice::from_slice(&buf[..IPV4_HEADER_LEN])
             .context("unable to parse ipv4 header")?;
-        let mut connections: HashMap<Quad, tcp::State> = Default::default();
+        let mut connections: HashMap<Quad, tcp::Connection> = Default::default();
 
         match proto {
             Proto::TCP => {
