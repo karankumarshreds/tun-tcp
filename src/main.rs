@@ -75,17 +75,19 @@ fn main() -> anyhow::Result<()> {
                 let tcp_payload_offset = IPV4_HEADER_LEN + TCP_HEADER_LEN;
                 connections
                     .entry(Quad {
-                        src: (
-                            ipv4_header.source_addr(),
-                            tcp_header.source_port(),
-                        ),
+                        src: (ipv4_header.source_addr(), tcp_header.source_port()),
                         dest: (
                             ipv4_header.destination_addr(),
                             tcp_header.destination_port(),
                         ),
                     })
                     .or_default()
-                    .on_packet(&mut nic, ipv4_header, tcp_header, &buf[tcp_payload_offset..*nbytes])?;
+                    .on_packet(
+                        &mut nic,
+                        ipv4_header,
+                        tcp_header,
+                        &buf[tcp_payload_offset..*nbytes],
+                    )?;
             }
             Proto::ICMP => {
                 // Manual
